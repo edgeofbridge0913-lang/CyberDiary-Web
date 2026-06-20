@@ -219,9 +219,9 @@ export default function MainPage() {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <p className="text-xs uppercase tracking-[0.35em] text-neon-pink/70">CYBERDIARY / ACTIVE LOG STREAM</p>
-            <h1 className="text-3xl font-black tracking-[0.25em] text-[#ff7ab6] md:text-4xl">AI日記アプリの起動画面</h1>
+            <h1 className="text-3xl font-black tracking-[0.25em] text-[#ff7ab6] md:text-4xl">CyberDiary</h1>
             <p className="max-w-2xl text-sm text-pink-100/80 md:text-base">
-              LocalStorage に保存されるサイバーパンク風の日記を、ネオン色のUIで管理します。
+              LocalStorage に保存します。登録した日記データはいつでも検索可能です。
             </p>
           </div>
           <div className="rounded-2xl border border-neon-pink/30 bg-neon-pink/10 p-4 text-sm text-pink-100/90 shadow-neon-glow">
