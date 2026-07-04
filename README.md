@@ -21,7 +21,6 @@ Set-ExecutionPolicy RemoteSigned
 ```
 確認メッセージが出たら: Y を押して「はい」と答えてください。これにより、ローカルで作成したスクリプトは実行可能になります。
 ```bash
-cd "C:\Users\edgeo\Documents\コーディング\04_日記作成アプリ"
 npm install
 npm run dev
 ```
