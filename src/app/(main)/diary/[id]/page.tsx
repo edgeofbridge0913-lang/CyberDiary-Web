@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo } from 'react';
 import GlowCard from '../../../../components/ui/GlowCard';
+import { normalizeCharacterLabels } from '../../../../data/characters';
 import { DiaryLog } from '../../../../data/types';
 import { useLocalStorage } from '../../../../utils/useLocalStorage';
 
@@ -13,6 +14,12 @@ export default function DiaryDetailPage({ params }: { params: { id: string } }) 
     () => logs.find((item) => item.id === params.id),
     [logs, params.id],
   );
+
+  const displayCharacters = useMemo(() => {
+    if (!entry) return [];
+    const normalized = normalizeCharacterLabels(entry.metadata.characters);
+    return normalized.length ? normalized : entry.metadata.characters;
+  }, [entry]);
 
   if (!entry) {
     return (
@@ -50,7 +57,7 @@ export default function DiaryDetailPage({ params }: { params: { id: string } }) 
         <div className="rounded-2xl border border-neon-pink/20 bg-neon-pink/5 p-4 text-sm text-pink-100/90">
           <p className="text-xs uppercase tracking-[0.25em] text-neon-pink/70">METADATA</p>
           <p className="mt-2">タグ: {entry.metadata.tags.join(', ') || 'なし'}</p>
-          <p className="mt-1">人物: {entry.metadata.characters.join(', ') || 'なし'}</p>
+          <p className="mt-1">人物: {displayCharacters.join(', ') || 'なし'}</p>
           <p className="mt-3 text-xs uppercase tracking-[0.2em] text-neon-pink/70">
             キーワード: {entry.metadata.keywords_extracted?.join(', ') || '未抽出'}
           </p>

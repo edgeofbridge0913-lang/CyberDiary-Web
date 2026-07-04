@@ -1,9 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import GlowCard from '../../components/ui/GlowCard';
 import NeonButton from '../../components/ui/NeonButton';
+import {
+  CHARACTER_OPTIONS,
+  CharacterLabel,
+  DEFAULT_CHARACTER_LABEL,
+  normalizeCharacterLabels,
+  toCharacterLabel,
+} from '../../data/characters';
 import { DiaryLog } from '../../data/types';
 import { useLocalStorage } from '../../utils/useLocalStorage';
 
@@ -24,7 +31,7 @@ const starterLogs: DiaryLog[] = [
       confidence_score: 0.92,
     },
     metadata: {
-      characters: ['AIオペレーター'],
+      characters: ['AI秘書'],
       tags: ['夜', '分析'],
       keywords_extracted: ['ネオン', 'シグナル', '整理'],
     },
@@ -36,14 +43,37 @@ export default function MainPage() {
   const [draftTitle, setDraftTitle] = useState('');
   const [draftContent, setDraftContent] = useState('');
   const [tagInput, setTagInput] = useState('');
-  const [characterInput, setCharacterInput] = useState('');
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterLabel>(DEFAULT_CHARACTER_LABEL);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
+  useEffect(() => {
+    setLogs((prev) => {
+      let changed = false;
+      const next = prev.map((entry) => {
+        const normalized = normalizeCharacterLabels(entry.metadata.characters);
+        if (normalized.join('|') === entry.metadata.characters.join('|')) {
+          return entry;
+        }
+
+        changed = true;
+        return {
+          ...entry,
+          metadata: {
+            ...entry.metadata,
+            characters: normalized.length ? normalized : [DEFAULT_CHARACTER_LABEL],
+          },
+        };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [setLogs]);
+
   const aiReply = useMemo(() => {
     if (!draftContent.trim()) {
-      return '記録を入力すると、AIオペレーターが解析結果を返す。';
+      return `${selectedCharacter}が解析結果を返します。`;
     }
 
     if (draftContent.length > 120) {
@@ -51,7 +81,7 @@ export default function MainPage() {
     }
 
     return '記録内容は安定。次のログ更新に進める。';
-  }, [draftContent]);
+  }, [draftContent, selectedCharacter]);
 
   const generateKeywords = (text: string) =>
     text
@@ -76,12 +106,12 @@ export default function MainPage() {
     return { comment: 'ログ同期完了。分析結果は安定領域にある。', type: 'feedback' as const };
   };
 
-  const fetchAiAnalysis = useCallback(async (title: string, content: string) => {
+  const fetchAiAnalysis = useCallback(async (title: string, content: string, character: CharacterLabel) => {
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content }),
+        body: JSON.stringify({ title, content, character }),
       });
       if (!res.ok) return null;
       const data = await res.json();
@@ -97,10 +127,10 @@ export default function MainPage() {
     const now = Date.now();
     const keywords = generateKeywords(draftContent.trim());
     const tags = parseList(tagInput);
-    const characters = parseList(characterInput);
+    const characters = [selectedCharacter];
 
     setAiLoading(true);
-    const llmComment = await fetchAiAnalysis(draftTitle.trim(), draftContent.trim());
+    const llmComment = await fetchAiAnalysis(draftTitle.trim(), draftContent.trim(), selectedCharacter);
     setAiLoading(false);
 
     const ai = llmComment
@@ -132,7 +162,7 @@ export default function MainPage() {
                   confidence_score: ai.type === 'warning' ? 0.82 : 0.91,
                 },
                 metadata: {
-                  characters: characters.length ? characters : entry.metadata.characters.length ? entry.metadata.characters : ['ユーザー'],
+                  characters,
                   tags: tags.length ? tags : entry.metadata.tags.length ? entry.metadata.tags : ['更新'],
                   keywords_extracted: keywords,
                 },
@@ -162,7 +192,7 @@ export default function MainPage() {
           confidence_score: ai.type === 'warning' ? 0.82 : 0.91,
         },
         metadata: {
-          characters: characters.length ? characters : ['ユーザー'],
+          characters,
           tags: tags.length ? tags : ['新規', '日記'],
           keywords_extracted: keywords,
         },
@@ -174,7 +204,7 @@ export default function MainPage() {
     setDraftTitle('');
     setDraftContent('');
     setTagInput('');
-    setCharacterInput('');
+    setSelectedCharacter(DEFAULT_CHARACTER_LABEL);
     setEditingId(null);
   };
 
@@ -182,7 +212,7 @@ export default function MainPage() {
     setDraftTitle(entry.title);
     setDraftContent(entry.content);
     setTagInput(entry.metadata.tags.join(', '));
-    setCharacterInput(entry.metadata.characters.join(', '));
+    setSelectedCharacter(toCharacterLabel(entry.metadata.characters[0]));
     setEditingId(entry.id);
   };
 
@@ -193,7 +223,7 @@ export default function MainPage() {
       setDraftTitle('');
       setDraftContent('');
       setTagInput('');
-      setCharacterInput('');
+      setSelectedCharacter(DEFAULT_CHARACTER_LABEL);
     }
   };
 
@@ -210,7 +240,7 @@ export default function MainPage() {
     setDraftTitle('');
     setDraftContent('');
     setTagInput('');
-    setCharacterInput('');
+    setSelectedCharacter(DEFAULT_CHARACTER_LABEL);
   };
 
   return (
@@ -275,13 +305,18 @@ export default function MainPage() {
               </label>
 
               <label className="block space-y-2 text-sm text-pink-100/90">
-                <span>登場人物</span>
-                <input
-                  value={characterInput}
-                  onChange={(e) => setCharacterInput(e.target.value)}
+                <span>キャラクタ</span>
+                <select
+                  value={selectedCharacter}
+                  onChange={(e) => setSelectedCharacter(e.target.value as CharacterLabel)}
                   className="w-full rounded-2xl border border-neon-pink/30 bg-black/80 px-4 py-3 text-pink-100 outline-none transition focus:border-neon-pink focus:shadow-neon-pink"
-                  placeholder="例: AIオペレーター, 友人"
-                />
+                >
+                  {CHARACTER_OPTIONS.map((character) => (
+                    <option key={character} value={character} className="bg-black text-pink-100">
+                      {character}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
 

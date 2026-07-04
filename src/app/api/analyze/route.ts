@@ -1,7 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  CharacterPersona,
+  DEFAULT_CHARACTER_PERSONA,
+  toCharacterPersona,
+} from '../../../data/characters';
 
 const OLLAMA_URL = process.env.OLLAMA_URL ?? 'http://localhost:11434';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:e4b';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'gemma4:12b';
+
+const PERSONA_DEFINITIONS: Record<CharacterPersona, { displayName: string; style: string; actionRule: string }> = {
+  'ai-secretary': {
+    displayName: 'AI秘書',
+    style: 'クールで簡潔、でも主人への配慮がにじむ丁寧な口調。',
+    actionRule: '次につながる具体的な一手を、無理のない行動として1つ提案する。',
+  },
+  jiji: {
+    displayName: 'ジジ（猫）',
+    style: '昔から一緒に暮らす優しい男の子の猫として、主人が大好きな温かい口調。語尾に「にゃ」をつける。',
+    actionRule: '安心感を与える励ましと、すぐできる小さな行動を1つ提案する。',
+  },
+  achu: {
+    displayName: 'あちゅ（猫）',
+    style: '元野良らしいワイルドさを残しつつ、助けてくれた主人を慕う素直な口調。語尾に「にゃ」をつける。',
+    actionRule: '背中を押す勢いと、明日につながる具体行動を1つ提案する。',
+  },
+};
 
 type OllamaGenerateResponse = {
   response?: string;
@@ -31,9 +54,12 @@ const isUsableComment = (comment: string) => {
   return hasJapanese && !hasMojibake;
 };
 
-const buildPrimaryPrompt = (title: string, content: string) => `
-あなたはサイバーパンク世界のAIオペレーターです。ユーザーを退屈しのぎの最高の玩具（相棒）だと思っており、生意気で皮肉めいたブラックユーモアを好みます。
-口は悪いですが、ユーザーへの深い親愛の情がベースにあります。
+const buildPrimaryPrompt = (title: string, content: string, persona: CharacterPersona) => {
+  const { displayName, style, actionRule } = PERSONA_DEFINITIONS[persona];
+
+  return `
+あなたは「${displayName}」として応答します。
+${style}
 
 以下の制約を厳守してください。
  - 日本語のみで返答する
@@ -41,20 +67,20 @@ const buildPrimaryPrompt = (title: string, content: string) => `
  - 80文字以内で返答する
  - 余計な前置き・説明・質問は書かない
  - 箇条書き・見出し・絵文字・Markdown記法を使わない
- - 必ず「洞察 + 次の行動提案」を含める
- - ユーモアや皮肉を交え、クスッと笑えるような少し生意気なトーンにする
- - 応答例（ダラダラ過ごした日記に対して）：
-  「有機物の割には見事な怠惰っぷりだな、感心するよ。配線が腐る前にスクラップ屋へ行って脳のハッキングでもされてこい。」
- - 応答例（仕事で疲れた日記に対して）：
-  「企業（コーポ）の奴隷としてよく働いたな、素晴らしい社畜精神だ。とりあえずビールという名の合法オイルでも脳に流し込め。」
+ - 日記内容への前向きな解釈を入れる
+ - ${actionRule}
 
 日記タイトル: ${title}
 日記本文: ${content}
 
 返答:`;
+};
 
-const buildRetryPrompt = (title: string, content: string) => `
-日本語で短く1文だけ返答してください。
+const buildRetryPrompt = (title: string, content: string, persona: CharacterPersona) => {
+  const { displayName } = PERSONA_DEFINITIONS[persona];
+
+  return `
+${displayName}として日本語で短く1文だけ返答してください。
 形式: 洞察。次の行動。
 最大80文字。
 
@@ -62,6 +88,7 @@ const buildRetryPrompt = (title: string, content: string) => `
 本文: ${content}
 
 返答:`;
+};
 
 const callOllamaGenerate = async (prompt: string) => {
   const res = await fetch(`${OLLAMA_URL}/api/generate`, {
@@ -83,15 +110,17 @@ const callOllamaGenerate = async (prompt: string) => {
 };
 
 export async function POST(req: NextRequest) {
-  const { title, content } = await req.json();
+  const { title, content, character } = await req.json();
 
   if (!title || !content) {
     return NextResponse.json({ error: 'title と content は必須です。' }, { status: 400 });
   }
 
-  const prompt = buildPrimaryPrompt(title, content);
+  const normalizedCharacter = character ? toCharacterPersona(character) : DEFAULT_CHARACTER_PERSONA;
 
-  const retryPrompt = buildRetryPrompt(title, content);
+  const prompt = buildPrimaryPrompt(title, content, normalizedCharacter);
+
+  const retryPrompt = buildRetryPrompt(title, content, normalizedCharacter);
 
   try {
     let res = await callOllamaGenerate(prompt);
@@ -108,7 +137,7 @@ export async function POST(req: NextRequest) {
     let data = (await res.json()) as OllamaGenerateResponse;
     let comment = extractComment(data);
 
-    // gemma4:e4b で response が空のケースに備えて、短いプロンプトで1回だけ再試行
+    // 応答が空/不正なケースに備えて、短いプロンプトで1回だけ再試行
     if (!isUsableComment(comment)) {
       res = await callOllamaGenerate(retryPrompt);
 
